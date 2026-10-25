@@ -78,6 +78,8 @@ function todo.update_main_task_list_for_everyone()
     for _, player in pairs(game.players) do
         todo.refresh_task_table(player)
     end
+    -- every change to the list ends here: tell other mods (remote interface)
+    todo.raise_tasks_changed()
 end
 
 function todo.refresh_task_table(player, search_term)

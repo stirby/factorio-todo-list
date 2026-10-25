@@ -61,6 +61,11 @@ function todo.create_edit_task_dialog(player, id)
 
     local assign_index = 1
     if task and task.assignee then
+        if not lookup[task.assignee] then
+            -- e.g. an external assignee that was removed: keep it selectable instead of losing it
+            players[#players + 1] = task.assignee
+            lookup[task.assignee] = #players
+        end
         assign_index = lookup[task.assignee]
     elseif todo.is_auto_assign(player) and c == 1 then
         assign_index = lookup[player.name]

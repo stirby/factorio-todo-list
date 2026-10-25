@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 19.16.0
+Date: 2026-10-25
+  Scripting:
+    - Remote interface "Todo-List" for other mods: read tasks, add tasks, update a task's title, text, assignee and status line, manage their own subtasks on a task, complete or reopen tasks, and register assignees that aren't players. See the README.
+    - Event on_tasks_changed (its id from the remote call get_event_ids), raised after any change to the list.
+  Features:
+    - A task can show a status line under its title, set by another mod and coloured by kind (info, progress, attention, error, success).
+    - The assignee drop-downs list assignees other mods registered, after the players.
+---------------------------------------------------------------------------------------------------
 Version: 19.15.3
 Date: 2026-06-25
   Changes:

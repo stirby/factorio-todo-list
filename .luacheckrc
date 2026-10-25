@@ -1,4 +1,4 @@
-globals = {"todo", "mod_gui", "script", "game", "defines", "data", "serpent", "settings", "storage"}
+globals = {"todo", "mod_gui", "script", "game", "defines", "data", "serpent", "settings", "storage", "remote"}
 read_globals = {
     os = {
         fields = {

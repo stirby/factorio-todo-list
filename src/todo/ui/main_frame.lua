@@ -186,6 +186,16 @@ function todo.create_task_table(frame, player)
     return table
 end
 
+local STATUS_COLORS = {
+    info = "0.81,0.79,0.76", progress = "0.96,0.76,0.35", attention = "0.55,0.77,1",
+    error = "0.94,0.48,0.43", success = "0.56,0.84,0.5"
+}
+
+function todo.status_caption(task)
+    local color = STATUS_COLORS[task.status_kind or ""] or STATUS_COLORS.info
+    return "[font=default-small][color=" .. color .. "]" .. tostring(task.status) .. "[/color][/font]"
+end
+
 function todo.add_task_to_table(player, table, task, completed, is_first, is_last, expanded)
     local id = task.id
 
@@ -201,12 +211,33 @@ function todo.add_task_to_table(player, table, task, completed, is_first, is_las
         state = completed
     })
 
-    table.add({
-        type = "label",
-        style = "todo_label_task",
-        name = "todo_main_task_title_" .. id,
-        caption = task.title
-    })
+    if (task.status) then
+        -- a live status line another mod sets through the remote interface, under the title
+        local cell = table.add({
+            type = "flow",
+            name = "todo_main_task_status_flow_" .. id,
+            direction = "vertical"
+        })
+        cell.add({
+            type = "label",
+            style = "todo_label_task",
+            name = "todo_main_task_title_" .. id,
+            caption = task.title
+        })
+        cell.add({
+            type = "label",
+            style = "todo_label_default",
+            name = "todo_main_task_status_" .. id,
+            caption = todo.status_caption(task)
+        })
+    else
+        table.add({
+            type = "label",
+            style = "todo_label_task",
+            name = "todo_main_task_title_" .. id,
+            caption = task.title
+        })
+    end
 
     if (task.assignee) then
         table.add({
