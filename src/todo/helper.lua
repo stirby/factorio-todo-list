@@ -19,6 +19,14 @@ function todo.get_player_list(current_player)
         lookup[player] = i
     end
 
+    -- assignees other mods registered (remote interface), e.g. an AI helper that isn't a player
+    for _, name in ipairs(todo.get_external_assignees()) do
+        if not lookup[name] then
+            table.insert(result, name)
+            lookup[name] = #result
+        end
+    end
+
     todo.log("Created Assignee list: " .. serpent.block(result))
     todo.log("Players in the game : " .. count)
 

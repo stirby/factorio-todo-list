@@ -92,6 +92,48 @@ screen space?
 In the settings menu you can disable it. Then you'll only be able to use the
 hotkey (default shift-t) or the shortcut to show/hide the todo list.
 
+## For mod authors: the remote interface
+
+Other mods can read and update the list through the remote interface `Todo-List`. For example, a mod can register an
+assignee that isn't a player (an NPC, a team, a bot), pick up the tasks players assign to it, show progress as a
+status line and its own subtasks, and complete them. Or it can just watch the list.
+
+```lua
+-- an assignee players can pick in the add and edit dialogs, after the players
+remote.call("Todo-List", "add_assignee", "Robot crew")
+
+-- react whenever the list changes (from the UI or another mod)
+script.on_event(remote.call("Todo-List", "get_event_ids").on_tasks_changed, function()
+    for _, task in pairs(remote.call("Todo-List", "get_tasks", false)) do
+        if task.assignee == "Robot crew" then
+            remote.call("Todo-List", "update_task", task.id, { status = "on it", status_kind = "progress" })
+            remote.call("Todo-List", "set_subtasks", task.id, "robot-crew-mod", {
+                { task = "Gather materials", done = true },
+                { task = "Build it", done = false },
+            })
+        end
+    end
+end)
+
+-- and when the work is done
+remote.call("Todo-List", "mark_complete", task_id)
+```
+
+| Call | Returns |
+|---|---|
+| `version()` | `1` |
+| `get_event_ids()` | `{ on_tasks_changed = id }`: raised after any change to the list |
+| `get_tasks(include_done)` | open tasks in list order (then done ones): `{ id, title, task, assignee, created_by, done, status, status_kind, subtasks = { { id, task, done, owner } } }` |
+| `get_task(id)` | one task, or `nil` |
+| `add_task({ title, task, assignee, top, created_by })` | the new task's id, or `nil` |
+| `update_task(id, { title, task, assignee, status, status_kind })` | `true`, or `false` for an unknown id. `status` is a short line under the title (`""` clears it), coloured by `status_kind`: `info`, `progress`, `attention`, `error` or `success`. `assignee = ""` unassigns |
+| `set_subtasks(id, owner, { { task, done } })` | replaces the subtasks `owner` made on the task; players' subtasks and other owners' stay |
+| `mark_complete(id)`, `mark_open(id)` | `true`, or `false` if it wasn't open (or done) |
+| `add_assignee(name)`, `remove_assignee(name)` | `true`/`false` |
+
+Every call checks its input and returns `false` or `nil` instead of raising an error. `on_tasks_changed` isn't raised
+again while its handlers run, so a handler may update tasks; change only what needs changing.
+
 ## How to contribute?
 
 If you want to contribute feel free to create a [pull request](https://github.com/JonasJurczok/factorio-todo-list/pulls) (with new translations for example).
