@@ -49,6 +49,88 @@ local function is_text(value)
     return type(value) == "string" and value ~= ""
 end
 
+-- at most n bytes, cut at a character boundary (string.sub counts bytes and could split a UTF-8 character)
+local function cut_utf8(text, n)
+    if #text <= n then
+        return text
+    end
+    local cut = n
+    while cut > 0 do
+        local byte = string.byte(text, cut + 1)
+        if byte < 0x80 or byte >= 0xC0 then
+            break
+        end
+        cut = cut - 1
+    end
+    return string.sub(text, 1, cut)
+end
+
+-- What players are typing into the new-subtask fields, so a refresh caused by another mod doesn't wipe it.
+-- (A player's own actions refresh without this: saving a subtask relies on the refresh to empty its field.)
+local function capture_drafts()
+    local drafts = {}
+    for _, player in pairs(game.players) do
+        local task_table = todo.get_main_frame(player) and todo.get_task_table(player)
+        if task_table then
+            for _, child in pairs(task_table.children) do
+                if child.type == "textfield" and child.text ~= ""
+                        and string.find(child.name, "^todo_main_subtask_new_text_") then
+                    drafts[player.index] = drafts[player.index] or {}
+                    drafts[player.index][child.name] = child.text
+                end
+            end
+        end
+    end
+    return drafts
+end
+
+local function restore_drafts(drafts)
+    for index, fields in pairs(drafts) do
+        local player = game.get_player(index)
+        local task_table = player and todo.get_main_frame(player) and todo.get_task_table(player)
+        if task_table then
+            for name, text in pairs(fields) do
+                local field = task_table[name]
+                if field and field.valid then
+                    field.text = text
+                end
+            end
+        end
+    end
+end
+
+-- a change made through this interface: redraw the list for everyone, keeping unfinished subtask text
+local function refresh_for_everyone()
+    local drafts = capture_drafts()
+    todo.update_main_task_list_for_everyone()
+    restore_drafts(drafts)
+end
+
+-- A changed status line, written into the labels already showing it: no redraw, so nothing players are typing
+-- or have focused is touched. False when some open list shows the task without a status line yet (or the status
+-- was cleared): that needs a redraw.
+local function update_status_in_place(task)
+    if not task.status then
+        return false
+    end
+    local labels = {}
+    for _, player in pairs(game.players) do
+        local task_table = todo.get_main_frame(player) and todo.get_task_table(player)
+        if task_table then
+            local flow = task_table["todo_main_task_status_flow_" .. task.id]
+            if flow and flow.valid then
+                labels[#labels + 1] = flow["todo_main_task_status_" .. task.id]
+            elseif task_table["todo_main_task_title_" .. task.id] then
+                return false
+            end
+        end
+    end
+    for _, label in ipairs(labels) do
+        label.caption = todo.status_caption(task)
+    end
+    return true
+end
+
 local function external_assignees()
     if not storage.todo.external_assignees then
         storage.todo.external_assignees = {}
@@ -187,7 +269,7 @@ function todo.remote_add_task(input)
 
     todo.log("Adding task by remote call: " .. serpent.line(task))
     todo.save_task_to_open_list(task, input.top == true)
-    todo.update_main_task_list_for_everyone()
+    refresh_for_everyone()
 
     return task.id
 end
@@ -201,11 +283,14 @@ function todo.remote_update_task(id, fields)
         return false
     end
 
-    local changed = false
+    local changed, layout = false, false
     local function set(key, value)
         if task[key] ~= value then
             task[key] = value
             changed = true
+            if key ~= "status" and key ~= "status_kind" then
+                layout = true
+            end
         end
     end
 
@@ -221,14 +306,18 @@ function todo.remote_update_task(id, fields)
     end
     if type(fields.status) == "string" then
         -- "" clears the status line
-        set("status", fields.status ~= "" and string.sub(fields.status, 1, 200) or nil)
+        set("status", fields.status ~= "" and cut_utf8(fields.status, 200) or nil)
     end
     if type(fields.status_kind) == "string" then
         set("status_kind", todo.STATUS_KINDS[fields.status_kind] and fields.status_kind or nil)
     end
 
     if changed then
-        todo.update_main_task_list_for_everyone()
+        if not layout and update_status_in_place(task) then
+            todo.raise_tasks_changed()
+        else
+            refresh_for_everyone()
+        end
     end
     return true
 end
@@ -296,7 +385,7 @@ function todo.remote_set_subtasks(id, owner, list)
         table.insert(item.done and task.subtasks.done or task.subtasks.open, subtask)
     end
 
-    todo.update_main_task_list_for_everyone()
+    refresh_for_everyone()
     return true
 end
 
@@ -305,7 +394,7 @@ function todo.remote_mark_complete(id)
         return false
     end
     todo.mark_complete(id)
-    todo.update_main_task_list_for_everyone()
+    refresh_for_everyone()
     return true
 end
 
@@ -314,7 +403,7 @@ function todo.remote_mark_open(id)
         return false
     end
     todo.task_mark_open(id)
-    todo.update_main_task_list_for_everyone()
+    refresh_for_everyone()
     return true
 end
 
